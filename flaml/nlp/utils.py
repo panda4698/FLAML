@@ -4,9 +4,9 @@ from typing import Dict, Any
 
 
 def load_default_huggingface_metric_for_task(task):
-    from ..data import SEQCLASSIFICATION, SEQREGRESSION
+    from ..data import SEQCLASSIFICATION, SEQREGRESSION,MULTICHOICECLASSIFICATION
 
-    if task == SEQCLASSIFICATION:
+    if task == SEQCLASSIFICATION or MULTICHOICECLASSIFICATION:
         return "accuracy", "max"
     elif task == SEQREGRESSION:
         return "rmse", "max"
@@ -16,9 +16,9 @@ global tokenized_column_names
 
 
 def tokenize_text(X, task, custom_hpo_task):
-    from ..data import SEQCLASSIFICATION, SEQREGRESSION
+    from ..data import SEQCLASSIFICATION, SEQREGRESSION, MULTICHOICECLASSIFICATION
 
-    if task in (SEQCLASSIFICATION, SEQREGRESSION):
+    if task in (SEQCLASSIFICATION, SEQREGRESSION, MULTICHOICECLASSIFICATION):
         return tokenize_text_seqclassification(X, custom_hpo_task)
 
 
@@ -73,11 +73,11 @@ def separate_config(config):
 
 
 def get_num_labels(task, y_train):
-    from ..data import SEQCLASSIFICATION, SEQREGRESSION
+    from ..data import SEQCLASSIFICATION, SEQREGRESSION, MULTICHOICECLASSIFICATION
 
     if task == SEQREGRESSION:
         return 1
-    elif task == SEQCLASSIFICATION:
+    elif task == SEQCLASSIFICATION or MULTICHOICECLASSIFICATION:
         return len(set(y_train))
 
 
@@ -147,7 +147,7 @@ def load_model(checkpoint_path, task, num_labels, per_model_config=None):
         AutoSeqClassificationHead,
         MODEL_CLASSIFICATION_HEAD_MAPPING,
     )
-    from ..data import SEQCLASSIFICATION, SEQREGRESSION
+    from ..data import SEQCLASSIFICATION, SEQREGRESSION, MULTICHOICECLASSIFICATION
 
     this_model_type = AutoConfig.from_pretrained(checkpoint_path).model_type
     this_vocab_size = AutoConfig.from_pretrained(checkpoint_path).vocab_size
@@ -175,7 +175,7 @@ def load_model(checkpoint_path, task, num_labels, per_model_config=None):
             )
         return model_config
 
-    if task == SEQCLASSIFICATION:
+    if task == SEQCLASSIFICATION or MULTICHOICECLASSIFICATION:
         num_labels_old = AutoConfig.from_pretrained(checkpoint_path).num_labels
         if is_pretrained_model_in_classification_head_list(this_model_type):
             model_config_num_labels = num_labels_old

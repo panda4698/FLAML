@@ -13,7 +13,8 @@ from datetime import datetime
 from typing import Dict, Union, List
 
 SEQCLASSIFICATION = "seq-classification"
-CLASSIFICATION = ("binary", "multi", "classification", SEQCLASSIFICATION)
+MULTICHOICECLASSIFICATION = "multichoice-classification"
+CLASSIFICATION = ("binary", "multi", "classification", SEQCLASSIFICATION,MULTICHOICECLASSIFICATION)
 SEQREGRESSION = "seq-regression"
 REGRESSION = ("regression", SEQREGRESSION)
 TS_FORECAST = "ts_forecast"
@@ -23,7 +24,7 @@ FORECAST = "forecast"
 
 
 def _is_nlp_task(task):
-    if task in [SEQCLASSIFICATION, SEQREGRESSION]:
+    if task in [SEQCLASSIFICATION, SEQREGRESSION, MULTICHOICECLASSIFICATION]:
         return True
     else:
         return False
