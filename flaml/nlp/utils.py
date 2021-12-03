@@ -18,8 +18,13 @@ global tokenized_column_names
 def tokenize_text(X, task, custom_hpo_task):
     from ..data import SEQCLASSIFICATION, SEQREGRESSION, MULTICHOICECLASSIFICATION
 
-    if task in (SEQCLASSIFICATION, SEQREGRESSION, MULTICHOICECLASSIFICATION):
+    if task in (SEQCLASSIFICATION, SEQREGRESSION):
         return tokenize_text_seqclassification(X, custom_hpo_task)
+    if task == MULTICHOICECLASSIFICATION:
+        """
+        if task is multichoice, use our own tokenize_text_funcion
+        """
+        return tokenize_text_multichoiceclassification()
 
 
 def tokenize_text_seqclassification(X, custom_hpo_args):
@@ -39,6 +44,23 @@ def tokenize_text_seqclassification(X, custom_hpo_args):
     X_tokenized = pandas.DataFrame(columns=tokenized_column_names)
     X_tokenized[tokenized_column_names] = d
     return X_tokenized
+
+
+def tokenize_text_multichoiceclassification(X, custom_hpo_args):
+    """
+    This is not complete, need to check the format of swag data,
+    and modify it to return the right output
+    """
+    from transformers import AutoTokenizer
+    import pandas
+
+    global tokenized_column_names
+
+    this_tokenizer = AutoTokenizer.from_pretrained(
+        custom_hpo_args.model_path, use_fast=True
+    )
+
+    pass
 
 
 def tokenize_glue(this_row, this_tokenizer, custom_hpo_args):
@@ -159,6 +181,17 @@ def load_model(checkpoint_path, task, num_labels, per_model_config=None):
             checkpoint_path, config=model_config
         )
 
+    def get_AutoModelForMultiChoice():
+        """
+        Our own get_model_function,
+        directly import AutoModelForMultipleChoice from transformers
+        """
+        from transformers import AutoModelForMultipleChoice
+
+        return AutoModelForMultipleChoice.from_pretrained(
+            checkpoint_path, config=model_config
+        )
+
     def is_pretrained_model_in_classification_head_list(model_type):
         return model_type in MODEL_CLASSIFICATION_HEAD_MAPPING
 
@@ -175,7 +208,7 @@ def load_model(checkpoint_path, task, num_labels, per_model_config=None):
             )
         return model_config
 
-    if task == SEQCLASSIFICATION or MULTICHOICECLASSIFICATION:
+    if task == SEQCLASSIFICATION:
         num_labels_old = AutoConfig.from_pretrained(checkpoint_path).num_labels
         if is_pretrained_model_in_classification_head_list(this_model_type):
             model_config_num_labels = num_labels_old
@@ -197,6 +230,34 @@ def load_model(checkpoint_path, task, num_labels, per_model_config=None):
                 this_model = get_this_model()
         else:
             this_model = get_this_model()
+        this_model.resize_token_embeddings(this_vocab_size)
+        return this_model
+    elif task == MULTICHOICECLASSIFICATION:
+        """
+        Everything is same as SEQCLASSIFICATION, 
+        only the get_model_function is different.
+        """
+        num_labels_old = AutoConfig.from_pretrained(checkpoint_path).num_labels
+        if is_pretrained_model_in_classification_head_list(this_model_type):
+            model_config_num_labels = num_labels_old
+        else:
+            model_config_num_labels = num_labels
+        model_config = _set_model_config(checkpoint_path)
+
+        if is_pretrained_model_in_classification_head_list(this_model_type):
+            if num_labels != num_labels_old:
+                this_model = get_AutoModelForMultiChoice()
+                model_config.num_labels = num_labels
+                this_model.num_labels = num_labels
+                this_model.classifier = (
+                    AutoSeqClassificationHead.from_model_type_and_config(
+                        this_model_type, model_config
+                    )
+                )
+            else:
+                this_model = get_AutoModelForMultiChoice()
+        else:
+            this_model = get_AutoModelForMultiChoice()
         this_model.resize_token_embeddings(this_vocab_size)
         return this_model
     elif task == SEQREGRESSION:
