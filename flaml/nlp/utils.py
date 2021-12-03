@@ -48,8 +48,6 @@ def tokenize_text_seqclassification(X, custom_hpo_args):
 
 def tokenize_text_multichoiceclassification(X, custom_hpo_args):
     """
-    This is not complete, need to check the format of swag data,
-    and modify it to return the right output
     """
     from transformers import AutoTokenizer
     import pandas
@@ -57,28 +55,31 @@ def tokenize_text_multichoiceclassification(X, custom_hpo_args):
     global tokenized_column_names
 
     this_tokenizer = AutoTokenizer.from_pretrained(
-        'roberta-base',  # 'roberta-base'
+        custom_hpo_args.model_path,  # 'roberta-base'
         cache_dir=None,
         use_fast=True,
         revision='main',
         use_auth_token=None
     )
-    d = tokenize_swag(X, this_tokenizer, custom_hpo_args)
 
+    d = X.apply(
+        lambda x: tokenize_swag(x, this_tokenizer, custom_hpo_args),
+        axis=1,  # apply function lambda x to each row.
+        result_type="expand",
+    )
     X_tokenized = pandas.DataFrame(columns=tokenized_column_names)
     X_tokenized[tokenized_column_names] = d
     return X_tokenized
 
 
-def tokenize_swag(row, this_tokenizer, custom_hpo_args):
+def tokenize_glue(this_row, this_tokenizer, custom_hpo_args):
     global tokenized_column_names
     assert (
-            "max_seq_length" in custom_hpo_args.__dict__
-    ), "max_seq_length must be provided for swag"
-    res =  row['sent1']
+        "max_seq_length" in custom_hpo_args.__dict__
+    ), "max_seq_length must be provided for glue"
+
     tokenized_example = this_tokenizer(
-        row['sent1'],
-        row['sent2'],
+        *tuple(this_row),
         padding="max_length",
         max_length=custom_hpo_args.max_seq_length,
         truncation=True,
@@ -86,11 +87,26 @@ def tokenize_swag(row, this_tokenizer, custom_hpo_args):
     tokenized_column_names = sorted(tokenized_example.keys())
     return [tokenized_example[x] for x in tokenized_column_names]
 
-def tokenize_glue(this_row, this_tokenizer, custom_hpo_args):
+
+def tokenize_swag(this_row, this_tokenizer, custom_hpo_args):
     global tokenized_column_names
     assert (
-        "max_seq_length" in custom_hpo_args.__dict__
-    ), "max_seq_length must be provided for glue"
+            "max_seq_length" in custom_hpo_args.__dict__
+    ), "max_seq_length must be provided for swag"
+    # first_sentences = []
+    # second_sentences = []
+    # for tup in X['sent1']:
+    #     first_sentences.append(tup)
+    # for tup in X['sent2']:
+    #     second_sentences.append(tup)
+    #
+    # tokenized_example = this_tokenizer(
+    #     first_sentences,
+    #     second_sentences,
+    #     padding="max_length",
+    #     max_length=custom_hpo_args.max_seq_length,
+    #     truncation=True,
+    # )
 
     tokenized_example = this_tokenizer(
         *tuple(this_row),

@@ -41,7 +41,8 @@ def test_hf_data():
     }
 
     automl_settings["custom_hpo_args"] = {
-        "model_path": "google/electra-small-discriminator",
+        # "model_path": "google/electra-small-discriminator",
+        "model_path": "roberta-base",
         "output_dir": "test/data/output/",
         "ckpt_per_epoch": 5,
         "fp16": False,
