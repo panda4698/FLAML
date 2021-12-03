@@ -24,7 +24,7 @@ def tokenize_text(X, task, custom_hpo_task):
         """
         if task is multichoice, use our own tokenize_text_funcion
         """
-        return tokenize_text_multichoiceclassification()
+        return tokenize_text_multichoiceclassification(X, custom_hpo_task)
 
 
 def tokenize_text_seqclassification(X, custom_hpo_args):
@@ -57,11 +57,34 @@ def tokenize_text_multichoiceclassification(X, custom_hpo_args):
     global tokenized_column_names
 
     this_tokenizer = AutoTokenizer.from_pretrained(
-        custom_hpo_args.model_path, use_fast=True
+        'roberta-base',  # 'roberta-base'
+        cache_dir=None,
+        use_fast=True,
+        revision='main',
+        use_auth_token=None
     )
+    d = tokenize_swag(X, this_tokenizer, custom_hpo_args)
 
-    pass
+    X_tokenized = pandas.DataFrame(columns=tokenized_column_names)
+    X_tokenized[tokenized_column_names] = d
+    return X_tokenized
 
+
+def tokenize_swag(row, this_tokenizer, custom_hpo_args):
+    global tokenized_column_names
+    assert (
+            "max_seq_length" in custom_hpo_args.__dict__
+    ), "max_seq_length must be provided for swag"
+    res =  row['sent1']
+    tokenized_example = this_tokenizer(
+        row['sent1'],
+        row['sent2'],
+        padding="max_length",
+        max_length=custom_hpo_args.max_seq_length,
+        truncation=True,
+    )
+    tokenized_column_names = sorted(tokenized_example.keys())
+    return [tokenized_example[x] for x in tokenized_column_names]
 
 def tokenize_glue(this_row, this_tokenizer, custom_hpo_args):
     global tokenized_column_names
