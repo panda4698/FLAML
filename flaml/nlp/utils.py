@@ -4,12 +4,16 @@ from typing import Dict, Any
 
 
 def load_default_huggingface_metric_for_task(task):
-    from ..data import SEQCLASSIFICATION, SEQREGRESSION
+    from ..data import SEQCLASSIFICATION, SEQREGRESSION, MULTICHOICECLASSIFICATION
 
     if task == SEQCLASSIFICATION:
         return "accuracy", "max"
     elif task == SEQREGRESSION:
         return "rmse", "max"
+    elif task == MULTICHOICECLASSIFICATION:
+        return "accuracy"
+
+
     # TODO: elif task == your task, return the default metric name for your task,
     #  e.g., if task == MULTIPLECHOICE, return "accuracy"
     #  notice this metric name has to be in ['accuracy', 'bertscore', 'bleu', 'bleurt',
@@ -24,15 +28,53 @@ global tokenized_column_names
 
 
 def tokenize_text(X, task, custom_hpo_task):
-    from ..data import SEQCLASSIFICATION, SEQREGRESSION
+    from ..data import SEQCLASSIFICATION, SEQREGRESSION, MULTICHOICECLASSIFICATION
 
     if task in (SEQCLASSIFICATION, SEQREGRESSION):
         return tokenize_text_seqclassification(X, custom_hpo_task)
+    elif task == MULTICHOICECLASSIFICATION:
+        return tokenize_text_multiplechoice(X, custom_hpo_task)
     # TODO: elif task == your task, return the tokenized result
     #  for example, if your task == MULTIPLE CHOICE, you should
     #  create a function named tokenize_text_multiplechoice(X, custom_hpo_args)
     #  and what it does is the same as preprocess_function at
     #  https://github.com/huggingface/transformers/blob/master/examples/pytorch/multiple-choice/run_swag.py#L329
+
+def tokenize_text_multiplechoice(X, custom_hpo_args):
+    from transformers import AutoTokenizer
+    import pandas
+
+    global tokenized_column_names
+
+    first_sentences = []
+    second_sentences = []
+    for tup in X['sent1']:
+        first_sentences.append(tup)
+    for tup in X['sent2']:
+        second_sentences.append(tup)
+
+    this_tokenizer = AutoTokenizer.from_pretrained(
+        custom_hpo_args.model_path,  # 'roberta-base'
+        cache_dir=None,
+        use_fast=True,
+        revision='main',
+        use_auth_token=None
+    )
+
+    tokenized_examples = this_tokenizer(
+        first_sentences,
+        second_sentences,
+        truncation=True,
+        max_length=custom_hpo_args.max_seq_length,
+        padding=False
+        # padding="max_length" if data_args.pad_to_max_length else False
+    )
+
+    return {k: [v[i: i + 4] for i in range(0, len(v), 4)] for k, v in tokenized_examples.items()}
+
+
+
+
 
 
 def tokenize_text_seqclassification(X, custom_hpo_args):
@@ -162,18 +204,24 @@ def load_model(checkpoint_path, task, num_labels, per_model_config=None):
         AutoSeqClassificationHead,
         MODEL_CLASSIFICATION_HEAD_MAPPING,
     )
-    from ..data import SEQCLASSIFICATION, SEQREGRESSION
+    from ..data import SEQCLASSIFICATION, SEQREGRESSION, MULTICHOICECLASSIFICATION
 
     this_model_type = AutoConfig.from_pretrained(checkpoint_path).model_type
     this_vocab_size = AutoConfig.from_pretrained(checkpoint_path).vocab_size
 
     def get_this_model():
         from transformers import AutoModelForSequenceClassification
+        from transformers import AutoModelForMultipleChoice
 
         if task in (SEQCLASSIFICATION, SEQREGRESSION):
             return AutoModelForSequenceClassification.from_pretrained(
                 checkpoint_path, config=model_config
             )
+        elif task == MULTICHOICECLASSIFICATION:
+            return AutoModelForMultipleChoice.from_pretrained(
+                checkpoint_path, config=model_config
+            )
+
         # TODO: elif task == your task, fill in the line in your transformers example
         #  that loads the model, e.g., if task == MULTIPLE CHOICE, according to
         #  https://github.com/huggingface/transformers/blob/master/examples/pytorch/multiple-choice/run_swag.py#L298
@@ -195,6 +243,18 @@ def load_model(checkpoint_path, task, num_labels, per_model_config=None):
                     checkpoint_path, num_labels=model_config_num_labels
                 )
             return model_config
+        elif task == MULTICHOICECLASSIFICATION:
+            if per_model_config and len(per_model_config) > 0:
+                model_config = AutoConfig.from_pretrained(
+                    checkpoint_path,
+                    **per_model_config,
+                )
+            else:
+                model_config = AutoConfig.from_pretrained(
+                    checkpoint_path
+                )
+            return model_config
+
         # TODO: elif task == your task, uncomment the code below:
         # else:
         #     if per_model_config and len(per_model_config) > 0:
