@@ -1,5 +1,6 @@
 import argparse
 from dataclasses import dataclass, field
+from itertools import chain
 from typing import Dict, Any
 
 
@@ -46,34 +47,38 @@ def tokenize_text_multiplechoice(X, custom_hpo_args):
 
     global tokenized_column_names
 
-    first_sentences = []
-    second_sentences = []
-    for tup in X['sent1']:
-        first_sentences.append(tup)
-    for tup in X['sent2']:
-        second_sentences.append(tup)
-
     this_tokenizer = AutoTokenizer.from_pretrained(
         custom_hpo_args.model_path,  # 'roberta-base'
         cache_dir=None,
         use_fast=True,
         revision='main',
-        use_auth_token=None
+        use_auth_token=None,
     )
+    t = X[['sent1', 'sent2']]
+    d = t.apply(
+        lambda x: tokenize_swag(x, this_tokenizer, custom_hpo_args),
+        axis=1,
+        result_type="expand",
+    )
+    X_tokenized = pandas.DataFrame(columns=tokenized_column_names)
+    X_tokenized[tokenized_column_names] = d
+    output = X_tokenized.join(X)
+    return output
 
-    tokenized_examples = this_tokenizer(
-        first_sentences,
-        second_sentences,
+
+
+def tokenize_swag(this_row, this_tokenizer, custom_hpo_args):
+    global tokenized_column_names
+
+    tokenized_example = this_tokenizer(
+        *tuple(this_row),
         truncation=True,
         max_length=custom_hpo_args.max_seq_length,
-        padding=False
+        padding=False,
         # padding="max_length" if data_args.pad_to_max_length else False
     )
-
-    return {k: [v[i: i + 4] for i in range(0, len(v), 4)] for k, v in tokenized_examples.items()}
-
-
-
+    tokenized_column_names = sorted(tokenized_example.keys())
+    return [tokenized_example[x] for x in tokenized_column_names]
 
 
 
